@@ -2,39 +2,41 @@
 import { readdir } from "node:fs/promises";
 import readline from "readline";
 
-/**
- * Leer archivos de la carpeta
- */
-async function listarArchivos(ruta: string): Promise<string[]> {
-  const archivos = await readdir(ruta);
-  // Filtrar solo archivos (no carpetas) y ordenar
-  return archivos.filter(f => f.isFile).map(f => f.name);
+/** Tipo para archivos */
+type Archivo = string;
+
+/** Leer archivos de la carpeta de forma segura */
+async function listarArchivos(ruta: string): Promise<Archivo[]> {
+  try {
+    const entries = await readdir(ruta, { withFileTypes: true });
+    return entries.filter(e => e.isFile()).map(e => e.name);
+  } catch (err) {
+    console.error("❌ Error al leer la carpeta:", err);
+    return [];
+  }
 }
 
-/**
- * Función de reemplazo segura con mayúsculas
- */
-function reemplazarNombres(originales: string[], nuevos: string[]): string[] {
+/** Reemplazar nombres de forma segura, manteniendo extensión */
+function reemplazarNombres(originales: Archivo[], nuevos: string[]): Archivo[] {
   if (originales.length !== nuevos.length) {
     throw new Error("La lista nueva no tiene la misma longitud que la original.");
   }
 
-  for (let n of nuevos) {
-    if (typeof n !== "string") {
-      throw new Error("Todos los elementos de la lista nueva deben ser strings.");
+  nuevos.forEach(n => {
+    if (typeof n !== "string" || n.trim() === "") {
+      throw new Error("Todos los elementos de la lista nueva deben ser strings no vacíos.");
     }
-  }
+  });
 
   return originales.map((nombre, i) => {
-    const extension = nombre.slice(nombre.lastIndexOf("."));
-    return nuevos[i].toUpperCase() + extension;
+    const idx: number = nombre.lastIndexOf(".");
+    const extension: string = idx !== -1 ? nombre.slice(idx) : "";
+    return `${nuevos[i].toUpperCase()}${extension}`;
   });
 }
 
-/**
- * Mostrar tabla Antes → Después
- */
-function mostrarAntesDespues(originales: string[], nuevos: string[]) {
+/** Mostrar tabla Antes → Después */
+function mostrarAntesDespues(originales: Archivo[], nuevos: Archivo[]): void {
   console.log("\n🔹 Vista previa Antes / Después 🔹\n");
   originales.forEach((o, i) => {
     console.log(`${o.padEnd(30)} → ${nuevos[i]}`);
@@ -42,96 +44,97 @@ function mostrarAntesDespues(originales: string[], nuevos: string[]) {
   console.log("");
 }
 
-/**
- * Leer input del usuario
- */
+/** Leer input del usuario de forma segura */
 function pregunta(prompt: string): Promise<string> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise(resolve => rl.question(prompt, ans => { rl.close(); resolve(ans); }));
 }
 
-/**
- * Asignar números aleatorios delante de los nombres (opción segura)
- */
-function asignarNumerosAleatorios(nombres: string[], numeros: number[], startNumero: number): string[] {
-  const nombresAsignados = [...nombres];
-  const disponibles = nombres.map((_, idx) => idx); // indices disponibles
-  let indexNumero = numeros.indexOf(startNumero);
-  if (indexNumero === -1) indexNumero = 0; // si no existe, empezar por el primero
+/** Asignar números aleatorios delante de los nombres de forma segura */
+function asignarNumerosAleatorios(
+  nombres: Archivo[],
+  numeros: number[],
+  startNumero: number
+): Archivo[] {
+  if (nombres.length === 0 || numeros.length === 0) return [...nombres];
+
+  const nombresAsignados: Archivo[] = [...nombres];
+  const disponibles: number[] = nombres.map((_, idx) => idx);
+  let indexNumero: number = numeros.indexOf(startNumero);
+  if (indexNumero === -1) indexNumero = 0;
 
   for (let i = 0; i < nombres.length; i++) {
     if (disponibles.length === 0) break;
 
-    // Elegir un índice aleatorio de los disponibles
-    const randIdx = Math.floor(Math.random() * disponibles.length);
-    const archivoIdx = disponibles.splice(randIdx, 1)[0];
+    const randIdx: number = Math.floor(Math.random() * disponibles.length);
+    const archivoIdx: number | undefined = disponibles.splice(randIdx, 1)[0];
+    if (archivoIdx === undefined) continue;
 
-    // Asignar número actual delante del nombre
-    const numero = numeros[indexNumero % numeros.length];
+    const numero: number = numeros[indexNumero % numeros.length]!;
     nombresAsignados[archivoIdx] = `${numero.toString().padStart(2, "0")} ${nombresAsignados[archivoIdx]}`;
-
     indexNumero++;
   }
 
   return nombresAsignados;
 }
 
-/**
- * Función principal
- */
-async function principal() {
+/** Función principal, con control de errores completo */
+async function principal(): Promise<void> {
   console.log("\n🎬 Cambiar Nombres Videos - Gestor Seguro .shorts\n");
 
   try {
-    const ruta = "E:\\SERGIPC\\Action Videos\\VIDEOS PARA SUBIR\\.shorts";
-    const originales = await listarArchivos(ruta);
-    if (originales.length === 0) {
+    const ruta: string = "E:\\SERGIPC\\Action Videos\\VIDEOS PARA SUBIR\\.shorts";
+    const originales: Archivo[] = await listarArchivos(ruta);
+
+    if (!originales.length) {
       console.log("No se encontraron archivos en la carpeta.");
       return;
     }
 
-    console.log("Archivos encontrados:", originales.length);
+    console.log(`Archivos encontrados: ${originales.length}\n`);
 
-    // 1️⃣ Pedir nuevos nombres
+    // Pedir nuevos nombres
     const nuevos: string[] = [];
-    for (let i = 0; i < originales.length; i++) {
-      const resp = await pregunta(`Nuevo nombre para "${originales[i]}" (sin extensión): `);
+    for (const original of originales) {
+      let resp: string = "";
+      while (!resp.trim()) {
+        resp = await pregunta(`Nuevo nombre para "${original}" (sin extensión, obligatorio): `);
+      }
       nuevos.push(resp.toUpperCase());
     }
 
-    const renombrados = reemplazarNombres(originales, nuevos);
+    const renombrados: Archivo[] = reemplazarNombres(originales, nuevos);
 
-    // 2️⃣ Mostrar vista previa
+    // Vista previa
     mostrarAntesDespues(originales, renombrados);
 
-    // 3️⃣ Opciones: todos / individual / cancelar
-    const opcion = await pregunta("Opciones: 1. Cambiar todos  2. Seleccionar individual  3. Cancelar [1]: ");
+    // Opciones: todos / individual / cancelar
+    const opcion: string = await pregunta("Opciones: 1. Cambiar todos  2. Seleccionar individual  3. Cancelar [1]: ") || "1";
     if (opcion === "3") {
       console.log("Operación cancelada. No se hicieron cambios.");
       return;
     } else if (opcion === "2") {
       for (let i = 0; i < originales.length; i++) {
-        const confirmar = await pregunta(`¿Cambiar "${originales[i]}" → "${renombrados[i]}"? (s/n) [s]: `);
-        if (confirmar.toLowerCase() !== "s" && confirmar !== "") {
-          renombrados[i] = originales[i]; // no cambiar
+        const confirmar: string = await pregunta(`¿Cambiar "${originales[i]}" → "${renombrados[i]}"? (s/n) [s]: `) || "s";
+        if (confirmar.toLowerCase() !== "s") {
+          renombrados[i] = originales[i]!; // seguro que no es undefined
         }
       }
     }
 
-    // 4️⃣ Pedir número inicial para añadir delante
-    const numeros = [0, 15, 16, 17, 18, 19, 20, 21, 22, 23];
-    const startResp = await pregunta("Número inicial para añadir delante (00,15,16...,23) o ENTER para omitir: ");
-    let startNumero = parseInt(startResp);
+    // Pedir número inicial para añadir delante
+    const numeros: number[] = [0, 15, 16, 17, 18, 19, 20, 21, 22, 23];
+    const startResp: string = await pregunta("Número inicial para añadir delante (00,15,...,23) o ENTER para omitir: ");
+    const startNumero: number = parseInt(startResp);
     if (!isNaN(startNumero) && numeros.includes(startNumero)) {
-      const conNumeros = asignarNumerosAleatorios(renombrados, numeros, startNumero);
+      const conNumeros: Archivo[] = asignarNumerosAleatorios(renombrados, numeros, startNumero);
       mostrarAntesDespues(renombrados, conNumeros);
-      // Aquí podrías renombrar archivos físicamente si quieres
+      // Aquí podrías renombrar físicamente los archivos si quieres
     }
 
     console.log("\n✅ Operación finalizada. Lista lista para renombrar o usar en otro paso.");
   } catch (error) {
-    console.log("❌ Error inesperado");
-    console.error(error);
+    console.error("❌ Error inesperado:", error);
   }
 }
 
