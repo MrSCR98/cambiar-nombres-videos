@@ -24,18 +24,20 @@ function nombresSinExtension(archivos: Archivo[]): string[] {
 }
 
 /** Limpiar nombres de caracteres inválidos */
-function limpiarNombre(nombre: string): string {
+function limpiarNombre(nombre: string | undefined): string {
+  if (!nombre) return "";
   return nombre.replace(/[\\/:*?"<>|]/g, "").trim();
 }
 
 /** Reemplazar nombres manteniendo extensión */
-function reemplazarNombres(originales: Archivo[], nuevos: string[]): Archivo[] {
+function reemplazarNombres(originales: Archivo[], nuevos: (string | undefined)[]): Archivo[] {
   if (originales.length !== nuevos.length) {
     throw new Error("La lista nueva no tiene la misma longitud que la original.");
   }
 
   return originales.map((nombre, i) => {
-    const nuevo = limpiarNombre(nuevos[i]);
+    const nuevoRaw = nuevos[i];
+    const nuevo = limpiarNombre(nuevoRaw);
     if (!nuevo) throw new Error(`El nombre nuevo para "${nombre}" está vacío después de limpiar caracteres inválidos.`);
     const idx = nombre.lastIndexOf(".");
     const extension = idx !== -1 ? nombre.slice(idx) : "";
@@ -105,7 +107,7 @@ async function renombrarFisicamente(ruta: string, originales: Archivo[], nuevos:
   for (let i = 0; i < originales.length; i++) {
     const orig = originales[i];
     const nuevo = nuevos[i];
-    if (!orig || !nuevo) continue;
+    if (!orig || !nuevo) continue; // seguridad extra
     try {
       await rename(`${ruta}\\${orig}`, `${ruta}\\${nuevo}`);
     } catch (err) {
@@ -119,7 +121,7 @@ async function principal(): Promise<void> {
   console.log("\n🎬 Cambiar Nombres Videos - Gestor Seguro .shorts\n");
 
   try {
-    const ruta = "E:\\SERGIPC\\Action Videos\\VIDEOS PARA SUBIR\\.shorts";
+    const ruta = "E:\\SERGIPC\\Action Videos\\VIDEOS PARA SUBIR\\.shorts2";
     const originales: string[] = await listarArchivos(ruta);
 
     if (!originales.length) {
@@ -129,17 +131,53 @@ async function principal(): Promise<void> {
 
     console.log("Archivos encontrados (sin extensión):");
     const nombresBase: string[] = nombresSinExtension(originales);
-    console.log(nombresBase, "\n"); // <-- Array completo devuelto al usuario
+    // console.log(nombresBase, "\n"); // <-- Array completo devuelto al usuario
+    // console.log(JSON.stringify(nombresBase, null, 2));
+    console.log(JSON.stringify(nombresBase, null, 0));
 
-    // ✅ Paso 2 – El usuario debe devolver un array con la misma longitud
+    // Paso 2 – El usuario devuelve un array con la misma longitud
+    //let nuevos: string[] = [];
+    //while (true) {
+    //  const resp = await pregunta("Pega aquí tu array de nuevos nombres separados por comas: ");
+    //  nuevos = resp.split(",").map(n => limpiarNombre(n));
+    //  if (nuevos.length === nombresBase.length) break;
+    //  console.log(`⚠️ La longitud no coincide (${nuevos.length} vs ${nombresBase.length}). Intenta de nuevo.`);
+    //}
+
     let nuevos: string[] = [];
-    while (true) {
-      const resp = await pregunta("Pega aquí tu array de nuevos nombres separados por comas: ");
-      nuevos = resp.split(",").map(n => limpiarNombre(n));
-      if (nuevos.length === nombresBase.length) break;
-      console.log(`⚠️ La longitud no coincide (${nuevos.length} vs ${nombresBase.length}). Intenta de nuevo.`);
+
+while (true) {
+  const resp = await pregunta("Pega aquí tu array JSON de nuevos nombres: ");
+
+  try {
+    const parsed = JSON.parse(resp);
+
+    if (!Array.isArray(parsed)) {
+      console.log("❌ Debe ser un array válido.");
+      continue;
     }
 
+    // Limpiar + validar tipos
+    nuevos = parsed.map((n, i) => {
+      if (typeof n !== "string") {
+        throw new Error(`El elemento en posición ${i} no es un string.`);
+      }
+      return limpiarNombre(n);
+    });
+
+    if (nuevos.length !== nombresBase.length) {
+      console.log(`⚠️ Longitud incorrecta (${nuevos.length} vs ${nombresBase.length})`);
+      continue;
+    }
+
+    break;
+
+  } catch (err) {
+    console.log("❌ JSON inválido. Asegúrate de pegar un array correcto.");
+  }
+}
+
+    // Reemplazar nombres con validación de tipo seguro
     let renombrados: string[] = reemplazarNombres(originales, nuevos);
     mostrarAntesDespues(originales, renombrados);
 
