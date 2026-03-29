@@ -7,7 +7,9 @@ type Archivo = string;
 async function listarArchivos(ruta: string): Promise<Archivo[]> {
   try {
     const entries = await readdir(ruta, { withFileTypes: true });
-    return entries.filter(e => e.isFile()).map(e => e.name);
+    const archivos = entries.filter(e => e.isFile()).map(e => e.name);
+    console.log(`\n📂 Se encontraron ${archivos.length} archivo(s) en la carpeta.`);
+    return archivos;
   } catch (err) {
     console.error("❌ Error al leer la carpeta:", err);
     return [];
@@ -31,7 +33,7 @@ function limpiarNombre(nombre: string | undefined): string {
 /** 4. Reemplazar nombres manteniendo extensión */
 function reemplazarNombres(originales: Archivo[], nuevos: string[]): Archivo[] {
   if (originales.length !== nuevos.length) {
-    throw new Error("La lista nueva no tiene la misma longitud que la original.");
+    throw new Error("La lista nueva no tiene la misma cantidad de archivos que la original.");
   }
   return originales.map((nombre, i) => {
     const nuevoRaw = nuevos[i];
@@ -77,16 +79,15 @@ function aplicarNumeracionFinal(
   const resultado = [...nombres];
   let indexEnLista = numeros.indexOf(startNumero);
   if (indexEnLista === -1) indexEnLista = 0;
-  
+
   let contador = ultimoContador + 1;
 
   for (const idx of indicesParaNumerar) {
     const num2Cifras = numeros[indexEnLista % numeros.length] ?? 0;
     const pContador = contador.toString().padStart(4, "0");
     const pNumero = num2Cifras.toString().padStart(2, "0");
-    
+
     resultado[idx] = `${pContador} ${pNumero} ${resultado[idx]}`;
-    
     indexEnLista++;
     contador++;
   }
@@ -96,21 +97,18 @@ function aplicarNumeracionFinal(
 
 /** 7. Mostrar SOLO los que han cambiado */
 function mostrarSoloCambios(originales: Archivo[], propuestos: Archivo[]): void {
-  console.log("\n🔹 Vista previa de ARCHIVOS A MODIFICAR 🔹\n");
+  console.log("\n🔹 Vista previa de archivos que se van a modificar 🔹\n");
   let hayCambios = false;
 
   originales.forEach((orig, i) => {
     const nuevo = propuestos[i]!;
     if (orig !== nuevo) {
-      console.log(`${orig.padEnd(45)} → ${nuevo}`);
+      console.log(`${orig.padEnd(50)} → ${nuevo}`);
       hayCambios = true;
     }
   });
 
-  if (!hayCambios) {
-    console.log("No hay cambios detectados.");
-  }
-  console.log("");
+  if (!hayCambios) console.log("✅ Todos los archivos están correctos, no hay cambios pendientes.\n");
 }
 
 /** 8. Leer input del usuario */
@@ -127,8 +125,9 @@ async function renombrarFisicamente(ruta: string, originales: Archivo[], nuevos:
     if (orig === nuevo) continue;
     try {
       await rename(`${ruta}\\${orig}`, `${ruta}\\${nuevo}`);
+      console.log(`✅ "${orig}" → "${nuevo}"`);
     } catch (err) {
-      console.error(`❌ Error con "${orig}":`, err);
+      console.error(`❌ Error al renombrar "${orig}":`, err);
     }
   }
 }
@@ -142,7 +141,7 @@ async function principal(): Promise<void> {
     const originales = await listarArchivos(ruta);
 
     if (!originales.length) {
-      console.log("Carpeta vacía.");
+      console.log("⚠️ Carpeta vacía. Coloca archivos dentro y vuelve a ejecutar.");
       return;
     }
 
@@ -151,25 +150,27 @@ async function principal(): Promise<void> {
     const originalesNuevos = indicesNuevos.map(i => originales[i]!);
 
     if (!originalesNuevos.length) {
-      console.log("No hay archivos nuevos (sin numeración) para procesar.");
+      console.log("ℹ️ No hay archivos nuevos sin numeración para procesar.");
       return;
     }
 
-    console.log("Nombres actuales (Nuevos):");
-    console.log(JSON.stringify(nombresSinExtension(originalesNuevos), null, 0));
+    console.log("\n📄 Archivos nuevos detectados:");
+    nombresSinExtension(originalesNuevos).forEach((n, i) => console.log(`  [${i + 1}] ${n}`));
 
     let nuevosNombresLimpios: string[] = [];
     while (true) {
-      const resp = await pregunta("\nPega el array JSON con los nuevos nombres: ");
+      const resp = await pregunta("\n📌 Pega aquí un array JSON con los nuevos nombres (ej: [\"Video 1\", \"Video 2\"]):\n> ");
       try {
         const parsed = JSON.parse(resp);
         if (!Array.isArray(parsed) || parsed.length !== originalesNuevos.length) {
-          console.log(`❌ Error: Se esperan ${originalesNuevos.length} nombres.`);
+          console.log(`❌ Debes ingresar exactamente ${originalesNuevos.length} nombres.`);
           continue;
         }
         nuevosNombresLimpios = parsed.map(n => limpiarNombre(String(n)));
         break;
-      } catch { console.log("❌ JSON inválido."); }
+      } catch { 
+        console.log("❌ JSON inválido. Asegúrate de usar comillas y corchetes correctos."); 
+      }
     }
 
     const nuevosConExtension = reemplazarNombres(originalesNuevos, nuevosNombresLimpios);
@@ -177,14 +178,13 @@ async function principal(): Promise<void> {
     let listaEnMemoria: string[] = [...originales];
     let indicesParaNumerar: number[] = [];
 
-    const opcion = (await pregunta("\nOpciones: 1. Todo  2. Selección individual  3. Cancelar [1]: ")) || "1";
+    const opcion = (await pregunta("\nOpciones:\n 1. Renombrar todos\n 2. Selección individual\n 3. Cancelar [1]: ")) || "1";
     if (opcion === "3") return;
 
     if (opcion === "2") {
       for (let i = 0; i < originalesNuevos.length; i++) {
         const idxOriginal = indicesNuevos[i]!;
         const confirmar = (await pregunta(`¿Renombrar "${originalesNuevos[i]}" a "${nuevosConExtension[i]}"? (s/n) [s]: `)) || "s";
-        
         if (confirmar.toLowerCase() === "s") {
           listaEnMemoria[idxOriginal] = nuevosConExtension[i]!;
           indicesParaNumerar.push(idxOriginal);
@@ -198,9 +198,9 @@ async function principal(): Promise<void> {
     }
 
     const numerosLista = [0, 15, 16, 17, 18, 19, 20, 21, 22, 23];
-    console.log(`\nÚltimo número de 2 cifras: ${ultimoNumero === -1 ? "Ninguno" : ultimoNumero}`);
-    const startResp = await pregunta("Número inicial o 'c' para continuar: ");
-    
+    console.log(`\nÚltimo número de 2 cifras utilizado: ${ultimoNumero === -1 ? "Ninguno" : ultimoNumero}`);
+    const startResp = await pregunta("Número inicial para numerar archivos (00,15,16,17,18,19,20,21,22,23) o 'c' para continuar automáticamente: ");
+
     let startNumero: number;
     if (startResp.toLowerCase() === "c") {
       const idxActual = numerosLista.indexOf(ultimoNumero);
@@ -212,19 +212,19 @@ async function principal(): Promise<void> {
 
     const nombresPropuestos = aplicarNumeracionFinal([...listaEnMemoria], numerosLista, startNumero, indicesParaNumerar, ultimoContador);
 
-    // --- AQUÍ ESTÁ EL CAMBIO: SOLO MUESTRA LOS QUE VAN A CAMBIAR ---
+    // --- Mostrar solo cambios ---
     mostrarSoloCambios(originales, nombresPropuestos);
 
-    const aplicar = (await pregunta("¿Aplicar cambios físicamente? (s/n) [s]: ")) || "s";
+    const aplicar = (await pregunta("¿Deseas aplicar los cambios físicamente? (s/n) [s]: ")) || "s";
     if (aplicar.toLowerCase() === "s") {
       await renombrarFisicamente(ruta, originales, nombresPropuestos);
-      console.log("\n✅ ¡Archivos actualizados!");
+      console.log("\n🎉 ¡Archivos actualizados correctamente!");
     } else {
-      console.log("\n❌ Operación cancelada.");
+      console.log("\n❌ Operación cancelada por el usuario.");
     }
 
   } catch (err) {
-    console.error("❌ Error:", err);
+    console.error("❌ Error inesperado:", err);
   }
 }
 
