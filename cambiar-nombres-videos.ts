@@ -1,5 +1,5 @@
 // cambiar-nombres-videos.ts
-import { readdir } from "node:fs/promises";
+import { readdir, rename } from "node:fs/promises";
 import readline from "readline";
 
 /** Tipo para archivos */
@@ -57,8 +57,8 @@ function pregunta(prompt: string): Promise<string> {
   return new Promise(resolve => rl.question(prompt, ans => { rl.close(); resolve(ans); }));
 }
 
-/** Asignar números aleatorios delante de los nombres de forma segura */
-function asignarNumerosAleatorios(
+/** Asignar contador secuencial + números aleatorios delante */
+function asignarContadorYNumeros(
   nombres: Archivo[],
   numeros: number[],
   startNumero: number
@@ -70,22 +70,40 @@ function asignarNumerosAleatorios(
   let indexNumero: number = numeros.indexOf(startNumero);
   if (indexNumero === -1) indexNumero = 0;
 
-  for (let i = 0; i < nombres.length; i++) {
-    if (disponibles.length === 0) break;
-
+  for (let contador = 0; disponibles.length > 0; contador++) {
     const randIdx: number = Math.floor(Math.random() * disponibles.length);
     const archivoIdx: number | undefined = disponibles.splice(randIdx, 1)[0];
     if (archivoIdx === undefined) continue;
 
     const numero: number = numeros[indexNumero % numeros.length]!;
-    nombresAsignados[archivoIdx] = `${numero.toString().padStart(2, "0")} ${nombresAsignados[archivoIdx]}`;
+    nombresAsignados[archivoIdx] = `${contador.toString().padStart(4, "0")} ${numero
+      .toString()
+      .padStart(2, "0")} ${nombresAsignados[archivoIdx]}`;
+
     indexNumero++;
   }
 
   return nombresAsignados;
 }
 
-/** Función principal, con control de errores completo */
+/** Renombrar archivos físicamente en la carpeta */
+async function renombrarFisicamente(
+  ruta: string,
+  originales: Archivo[],
+  nuevos: Archivo[]
+) {
+  for (let i = 0; i < originales.length; i++) {
+    const orig = `${ruta}\\${originales[i]}`;
+    const nuevo = `${ruta}\\${nuevos[i]}`;
+    try {
+      await rename(orig, nuevo);
+    } catch (err) {
+      console.error(`❌ Error renombrando "${originales[i]}" a "${nuevos[i]}":`, err);
+    }
+  }
+}
+
+/** Función principal */
 async function principal(): Promise<void> {
   console.log("\n🎬 Cambiar Nombres Videos - Gestor Seguro .shorts\n");
 
@@ -114,7 +132,7 @@ async function principal(): Promise<void> {
     }
 
     // Generar array final con extensión
-    const renombrados: Archivo[] = reemplazarNombres(originales, nuevos);
+    let renombrados: Archivo[] = reemplazarNombres(originales, nuevos);
 
     // Vista previa
     mostrarAntesDespues(originales, renombrados);
@@ -128,7 +146,7 @@ async function principal(): Promise<void> {
       for (let i = 0; i < originales.length; i++) {
         const confirmar: string = (await pregunta(`¿Cambiar "${originales[i]}" → "${renombrados[i]}"? (s/n) [s]: `)) || "s";
         if (confirmar.toLowerCase() !== "s") {
-          renombrados[i] = originales[i]!; // seguro que no es undefined
+          renombrados[i] = originales[i]!; // mantener original
         }
       }
     }
@@ -138,12 +156,19 @@ async function principal(): Promise<void> {
     const startResp: string = await pregunta("Número inicial para añadir delante (00,15,...,23) o ENTER para omitir: ");
     const startNumero: number = parseInt(startResp);
     if (!isNaN(startNumero) && numeros.includes(startNumero)) {
-      const conNumeros: Archivo[] = asignarNumerosAleatorios(renombrados, numeros, startNumero);
-      mostrarAntesDespues(renombrados, conNumeros);
-      // Aquí podrías renombrar físicamente los archivos si quieres
+      renombrados = asignarContadorYNumeros(renombrados, numeros, startNumero);
+      mostrarAntesDespues(originales, renombrados);
     }
 
-    console.log("\n✅ Operación finalizada. Lista lista para renombrar o usar en otro paso.");
+    // Preguntar si se aplican los cambios físicamente
+    const aplicar: string = (await pregunta("¿Renombrar los archivos físicamente en la carpeta? (s/n) [s]: ")) || "s";
+    if (aplicar.toLowerCase() === "s") {
+      await renombrarFisicamente(ruta, originales, renombrados);
+      console.log("\n✅ Archivos renombrados correctamente.");
+    } else {
+      console.log("\n⚠️ Cambios solo en memoria. No se renombró ningún archivo.");
+    }
+
   } catch (error) {
     console.error("❌ Error inesperado:", error);
   }
