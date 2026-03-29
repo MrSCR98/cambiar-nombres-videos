@@ -17,21 +17,20 @@ async function listarArchivos(ruta: string): Promise<Archivo[]> {
 }
 
 /** Reemplazar nombres de forma segura, manteniendo extensión */
-function reemplazarNombres(originales: Archivo[], nuevos: string[]): Archivo[] {
+function reemplazarNombres(originales: Archivo[], nuevos: (string | undefined)[]): Archivo[] {
   if (originales.length !== nuevos.length) {
     throw new Error("La lista nueva no tiene la misma longitud que la original.");
   }
 
-  nuevos.forEach(n => {
-    if (typeof n !== "string" || n.trim() === "") {
-      throw new Error("Todos los elementos de la lista nueva deben ser strings no vacíos.");
-    }
-  });
-
   return originales.map((nombre, i) => {
+    const nuevo: string | undefined = nuevos[i];
+    if (!nuevo || !nuevo.trim()) {
+      throw new Error(`El nombre nuevo para "${nombre}" está vacío o es undefined.`);
+    }
+
     const idx: number = nombre.lastIndexOf(".");
     const extension: string = idx !== -1 ? nombre.slice(idx) : "";
-    return `${nuevos[i].toUpperCase()}${extension}`;
+    return `${nuevo.toUpperCase()}${extension}`;
   });
 }
 
@@ -109,13 +108,13 @@ async function principal(): Promise<void> {
     mostrarAntesDespues(originales, renombrados);
 
     // Opciones: todos / individual / cancelar
-    const opcion: string = await pregunta("Opciones: 1. Cambiar todos  2. Seleccionar individual  3. Cancelar [1]: ") || "1";
+    const opcion: string = (await pregunta("Opciones: 1. Cambiar todos  2. Seleccionar individual  3. Cancelar [1]: ")) || "1";
     if (opcion === "3") {
       console.log("Operación cancelada. No se hicieron cambios.");
       return;
     } else if (opcion === "2") {
       for (let i = 0; i < originales.length; i++) {
-        const confirmar: string = await pregunta(`¿Cambiar "${originales[i]}" → "${renombrados[i]}"? (s/n) [s]: `) || "s";
+        const confirmar: string = (await pregunta(`¿Cambiar "${originales[i]}" → "${renombrados[i]}"? (s/n) [s]: `)) || "s";
         if (confirmar.toLowerCase() !== "s") {
           renombrados[i] = originales[i]!; // seguro que no es undefined
         }

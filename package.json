@@ -1,6 +1,5 @@
 {
   "name": "cambiar-nombres-videos",
-  "module": "index.ts",
   "type": "module",
   "private": true,
   "devDependencies": {
