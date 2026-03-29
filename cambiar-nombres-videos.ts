@@ -2,47 +2,47 @@
 import { readdir, rename } from "node:fs/promises";
 import readline from "readline";
 
-/** Tipo para archivos */
 type Archivo = string;
 
-/** Leer archivos de la carpeta de forma segura */
+/** Leer archivos de la carpeta */
 async function listarArchivos(ruta: string): Promise<Archivo[]> {
   try {
     const entries = await readdir(ruta, { withFileTypes: true });
-    return entries.filter(e => e.isFile()).map(e => e.name);
+    // Filtrar solo archivos (sin predicado de tipo)
+    const files: string[] = entries.filter(e => e.isFile()).map(e => e.name);
+    return files;
   } catch (err) {
     console.error("❌ Error al leer la carpeta:", err);
     return [];
   }
 }
 
-/** Obtener solo nombres sin extensión */
-function nombresSinExtension(archivos: string[]): string[] {
+/** Obtener nombres sin extensión */
+function nombresSinExtension(archivos: Archivo[]): string[] {
   return archivos.map(f => {
     const idx = f.lastIndexOf(".");
     return idx !== -1 ? f.slice(0, idx) : f;
   });
 }
 
-/** Reemplazar nombres de forma segura, manteniendo extensión */
-function reemplazarNombres(originales: Archivo[], nuevos: (string | undefined)[]): Archivo[] {
+/** Reemplazar nombres manteniendo extensión */
+function reemplazarNombres(originales: Archivo[], nuevos: string[]): Archivo[] {
   if (originales.length !== nuevos.length) {
     throw new Error("La lista nueva no tiene la misma longitud que la original.");
   }
 
   return originales.map((nombre, i) => {
-    const nuevo: string | undefined = nuevos[i];
+    const nuevo = nuevos[i];
     if (!nuevo || !nuevo.trim()) {
-      throw new Error(`El nombre nuevo para "${nombre}" está vacío o es undefined.`);
+      throw new Error(`El nombre nuevo para "${nombre}" está vacío.`);
     }
-
-    const idx: number = nombre.lastIndexOf(".");
-    const extension: string = idx !== -1 ? nombre.slice(idx) : "";
+    const idx = nombre.lastIndexOf(".");
+    const extension = idx !== -1 ? nombre.slice(idx) : "";
     return `${nuevo.toUpperCase()}${extension}`;
   });
 }
 
-/** Mostrar tabla Antes → Después */
+/** Mostrar Antes / Después */
 function mostrarAntesDespues(originales: Archivo[], nuevos: Archivo[]): void {
   console.log("\n🔹 Vista previa Antes / Después 🔹\n");
   originales.forEach((o, i) => {
@@ -51,54 +51,64 @@ function mostrarAntesDespues(originales: Archivo[], nuevos: Archivo[]): void {
   console.log("");
 }
 
-/** Leer input del usuario de forma segura */
+/** Leer input del usuario */
 function pregunta(prompt: string): Promise<string> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise(resolve => rl.question(prompt, ans => { rl.close(); resolve(ans); }));
+  return new Promise(resolve => rl.question(prompt, ans => { rl.close(); resolve(ans ?? ""); }));
 }
 
-/** Asignar contador secuencial + números aleatorios delante */
+/** Detectar archivos numerados */
+function detectarArchivosNumerados(archivos: Archivo[]): { indicesIgnorar: number[], ultimoContador: number } {
+  const regex = /^(\d{4}) (\d{2}) /;
+  const indicesIgnorar: number[] = [];
+  let maxContador = -1;
+
+  archivos.forEach((f, idx) => {
+    const match = f.match(regex);
+    if (match?.[1] !== undefined) {
+      indicesIgnorar.push(idx);
+      const contador = parseInt(match[1], 10);
+      if (!isNaN(contador) && contador > maxContador) maxContador = contador;
+    }
+  });
+
+  return { indicesIgnorar, ultimoContador: maxContador };
+}
+
+/** Asignar contador + números delante */
 function asignarContadorYNumeros(
   nombres: Archivo[],
   numeros: number[],
-  startNumero: number
+  startNumero: number,
+  indicesIgnorar: number[],
+  ultimoContador: number
 ): Archivo[] {
-  if (nombres.length === 0 || numeros.length === 0) return [...nombres];
-
   const nombresAsignados: Archivo[] = [...nombres];
-  const disponibles: number[] = nombres.map((_, idx) => idx);
-  let indexNumero: number = numeros.indexOf(startNumero);
+  const disponibles: number[] = nombres.map((_, idx) => idx).filter(idx => !indicesIgnorar.includes(idx));
+  let indexNumero = numeros.indexOf(startNumero);
   if (indexNumero === -1) indexNumero = 0;
+  let contador = ultimoContador + 1;
 
-  for (let contador = 0; disponibles.length > 0; contador++) {
-    const randIdx: number = Math.floor(Math.random() * disponibles.length);
-    const archivoIdx: number | undefined = disponibles.splice(randIdx, 1)[0];
-    if (archivoIdx === undefined) continue;
-
-    const numero: number = numeros[indexNumero % numeros.length]!;
-    nombresAsignados[archivoIdx] = `${contador.toString().padStart(4, "0")} ${numero
-      .toString()
-      .padStart(2, "0")} ${nombresAsignados[archivoIdx]}`;
-
+  for (const idxArchivo of disponibles) {
+    const numero = numeros[indexNumero % numeros.length] ?? 0;
+    nombresAsignados[idxArchivo] = `${contador.toString().padStart(4, "0")} ${numero.toString().padStart(2, "0")} ${nombresAsignados[idxArchivo]}`;
     indexNumero++;
+    contador++;
   }
 
   return nombresAsignados;
 }
 
-/** Renombrar archivos físicamente en la carpeta */
-async function renombrarFisicamente(
-  ruta: string,
-  originales: Archivo[],
-  nuevos: Archivo[]
-) {
+/** Renombrar archivos físicamente */
+async function renombrarFisicamente(ruta: string, originales: Archivo[], nuevos: Archivo[]) {
   for (let i = 0; i < originales.length; i++) {
-    const orig = `${ruta}\\${originales[i]}`;
-    const nuevo = `${ruta}\\${nuevos[i]}`;
+    const orig = originales[i];
+    const nuevo = nuevos[i];
+    if (!orig || !nuevo) continue; // Validación extra para TS
     try {
-      await rename(orig, nuevo);
+      await rename(`${ruta}\\${orig}`, `${ruta}\\${nuevo}`);
     } catch (err) {
-      console.error(`❌ Error renombrando "${originales[i]}" a "${nuevos[i]}":`, err);
+      console.error(`❌ Error renombrando "${orig}" a "${nuevo}":`, err);
     }
   }
 }
@@ -108,8 +118,8 @@ async function principal(): Promise<void> {
   console.log("\n🎬 Cambiar Nombres Videos - Gestor Seguro .shorts\n");
 
   try {
-    const ruta: string = "E:\\SERGIPC\\Action Videos\\VIDEOS PARA SUBIR\\.shorts";
-    const originales: Archivo[] = await listarArchivos(ruta);
+    const ruta = "E:\\SERGIPC\\Action Videos\\VIDEOS PARA SUBIR\\.shorts";
+    const originales: string[] = await listarArchivos(ruta);
 
     if (!originales.length) {
       console.log("No se encontraron archivos en la carpeta.");
@@ -118,23 +128,32 @@ async function principal(): Promise<void> {
 
     console.log(`Archivos encontrados: ${originales.length}\n`);
 
-    // Mostrar nombres sin extensión al usuario
     const nombresBase: string[] = nombresSinExtension(originales);
 
     // Pedir nuevos nombres
     const nuevos: string[] = [];
-    for (const nombre of nombresBase) {
+    for (let i = 0; i < nombresBase.length; i++) {
+      const orig = originales[i];
+      const base = nombresBase[i];
+      if (!orig || !base) continue; // seguridad
+
+      const regex = /^(\d{4}) (\d{2}) /;
+      const match = orig.match(regex);
+      if (match !== null) {
+        nuevos.push(base);
+        continue;
+      }
+
       let resp: string = "";
       while (!resp.trim()) {
-        resp = await pregunta(`Nuevo nombre para "${nombre}" (sin extensión, obligatorio): `);
+        const tmp = await pregunta(`Nuevo nombre para "${base}" (sin extensión, obligatorio): `);
+        if (tmp) resp = tmp;
       }
-      nuevos.push(resp.toUpperCase());
+      nuevos.push(resp);
     }
 
-    // Generar array final con extensión
-    let renombrados: Archivo[] = reemplazarNombres(originales, nuevos);
+    let renombrados: string[] = reemplazarNombres(originales, nuevos);
 
-    // Vista previa
     mostrarAntesDespues(originales, renombrados);
 
     // Opciones: todos / individual / cancelar
@@ -144,23 +163,29 @@ async function principal(): Promise<void> {
       return;
     } else if (opcion === "2") {
       for (let i = 0; i < originales.length; i++) {
-        const confirmar: string = (await pregunta(`¿Cambiar "${originales[i]}" → "${renombrados[i]}"? (s/n) [s]: `)) || "s";
+        const orig = originales[i];
+        const ren = renombrados[i];
+        if (!orig || !ren) continue;
+        const confirmar: string = (await pregunta(`¿Cambiar "${orig}" → "${ren}"? (s/n) [s]: `)) || "s";
         if (confirmar.toLowerCase() !== "s") {
-          renombrados[i] = originales[i]!; // mantener original
+          renombrados[i] = orig;
         }
       }
     }
 
-    // Pedir número inicial para añadir delante
-    const numeros: number[] = [0, 15, 16, 17, 18, 19, 20, 21, 22, 23];
+    // Detectar archivos numerados
+    const numerosLista: number[] = [0, 15, 16, 17, 18, 19, 20, 21, 22, 23];
+    const { indicesIgnorar, ultimoContador } = detectarArchivosNumerados(renombrados);
+
+    // Preguntar número inicial
     const startResp: string = await pregunta("Número inicial para añadir delante (00,15,...,23) o ENTER para omitir: ");
     const startNumero: number = parseInt(startResp);
-    if (!isNaN(startNumero) && numeros.includes(startNumero)) {
-      renombrados = asignarContadorYNumeros(renombrados, numeros, startNumero);
+    if (!isNaN(startNumero) && numerosLista.includes(startNumero)) {
+      renombrados = asignarContadorYNumeros(renombrados, numerosLista, startNumero, indicesIgnorar, ultimoContador);
       mostrarAntesDespues(originales, renombrados);
     }
 
-    // Preguntar si se aplican los cambios físicamente
+    // Preguntar si renombrar físicamente
     const aplicar: string = (await pregunta("¿Renombrar los archivos físicamente en la carpeta? (s/n) [s]: ")) || "s";
     if (aplicar.toLowerCase() === "s") {
       await renombrarFisicamente(ruta, originales, renombrados);
@@ -174,5 +199,4 @@ async function principal(): Promise<void> {
   }
 }
 
-// Ejecutar
 principal();
