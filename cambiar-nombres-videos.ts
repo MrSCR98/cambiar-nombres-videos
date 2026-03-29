@@ -107,7 +107,7 @@ async function renombrarFisicamente(ruta: string, originales: Archivo[], nuevos:
   for (let i = 0; i < originales.length; i++) {
     const orig = originales[i];
     const nuevo = nuevos[i];
-    if (!orig || !nuevo) continue; // seguridad extra
+    if (!orig || !nuevo) continue;
     try {
       await rename(`${ruta}\\${orig}`, `${ruta}\\${nuevo}`);
     } catch (err) {
@@ -129,7 +129,6 @@ async function principal(): Promise<void> {
       return;
     }
 
-    // Detectar archivos numerados y obtener solo los nuevos
     const { indicesIgnorar, ultimoContador } = detectarArchivosNumerados(originales);
     const indicesNuevos = originales.map((_, i) => i).filter(i => !indicesIgnorar.includes(i));
     const originalesNuevos = indicesNuevos.map(i => originales[i]!);
@@ -158,36 +157,49 @@ async function principal(): Promise<void> {
       } catch (err) { console.log("❌ JSON inválido. Asegúrate de pegar un array correcto."); }
     }
 
-    // Reemplazar nombres solo de los nuevos archivos
     const nuevosRenombrados = reemplazarNombres(originalesNuevos, nuevos);
-    const renombrados: string[] = [...originales];
-    indicesNuevos.forEach((idx, i) => { renombrados[idx] = nuevosRenombrados[i]; });
+    
+    // SOLUCIÓN ERROR 3: Cambiamos 'const' por 'let' para poder reasignar más adelante
+    let renombrados: string[] = [...originales];
 
-    // Mostrar solo los nuevos
+    // SOLUCIÓN ERROR 1: Aseguramos que el valor no es undefined con el operador !
+    indicesNuevos.forEach((idx, i) => { 
+      renombrados[idx] = nuevosRenombrados[i]!; 
+    });
+
     mostrarAntesDespues(originalesNuevos, nuevosRenombrados);
 
-    // Opciones solo para nuevos
     const opcion: string = (await pregunta("Opciones: 1. Cambiar todos  2. Seleccionar individual  3. Cancelar [1]: ")) || "1";
     if (opcion === "3") { console.log("Operación cancelada. No se hicieron cambios."); return; }
     else if (opcion === "2") {
+      // CORRECCIÓN: Usamos 'originalesNuevos' que es el array que contiene los archivos a procesar
       for (let i = 0; i < originalesNuevos.length; i++) {
-        const orig = originalesNuevos[i];
-        const ren = nuevosRenombrados[i];
+        const orig = originalesNuevos[i]!; // ! asegura que existe
+        const ren = nuevosRenombrados[i]!;
+        
         const confirmar: string = (await pregunta(`¿Cambiar "${orig}" → "${ren}"? (s/n) [s]: `)) || "s";
-        if (confirmar.toLowerCase() !== "s") { renombrados[indicesNuevos[i]] = originalesNuevos[i]; }
+        
+        if (confirmar.toLowerCase() !== "s") { 
+          // Si el usuario dice que no, restauramos el nombre original en esa posición
+          const indiceOriginal = indicesNuevos[i]!;
+          renombrados[indiceOriginal] = originalesNuevos[i]!; 
+        }
       }
     }
 
-    // Numeración automática
     const numerosLista: number[] = [0, 15, 16, 17, 18, 19, 20, 21, 22, 23];
     const startResp: string = await pregunta("Número inicial para añadir delante (00,15,...,23) o ENTER para omitir: ");
     const startNumero: number = parseInt(startResp);
+    
     if (!isNaN(startNumero) && numerosLista.includes(startNumero)) {
+      // SOLUCIÓN ERROR 3 (Parte B): Reasignación permitida por usar 'let'
       renombrados = asignarContadorYNumeros(renombrados, numerosLista, startNumero, indicesIgnorar, ultimoContador);
-      mostrarAntesDespues(originalesNuevos, indicesNuevos.map(i => renombrados[i]));
+      
+      // SOLUCIÓN ERROR 4: Casting forzado a string[] ya que sabemos que el mapeo será válido
+      const vistaFinal = indicesNuevos.map(i => renombrados[i]!) as string[];
+      mostrarAntesDespues(originalesNuevos, vistaFinal);
     }
 
-    // Preguntar si renombrar físicamente
     const aplicar: string = (await pregunta("¿Renombrar los archivos físicamente en la carpeta? (s/n) [s]: ")) || "s";
     if (aplicar.toLowerCase() === "s") {
       await renombrarFisicamente(ruta, originales, renombrados);
