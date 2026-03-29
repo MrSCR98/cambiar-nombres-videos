@@ -155,7 +155,7 @@ async function principal(): Promise<void> {
     }
 
     console.log("\n📄 Archivos nuevos detectados:");
-    nombresSinExtension(originalesNuevos).forEach((n, i) => console.log(`  [${i + 1}] ${n}`));
+    console.log(JSON.stringify(nombresSinExtension(originalesNuevos), null, 0));
 
     let nuevosNombresLimpios: string[] = [];
     while (true) {
