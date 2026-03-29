@@ -143,15 +143,28 @@ function pregunta(prompt: string): Promise<string> {
 
 /** 9. Renombrar físicamente */
 async function renombrarFisicamente(ruta: string, originales: Archivo[], nuevos: Archivo[]) {
+  const listaParaRenombrar: { orig: string, nuevo: string, id: number }[] = [];
+
+  // Recopilamos los que realmente cambian
   for (let i = 0; i < originales.length; i++) {
     const orig = originales[i]!;
     const nuevo = nuevos[i]!;
     if (orig === nuevo) continue;
+
+    const match = nuevo.match(/^(\d{4})/);
+    const id = match ? parseInt(match[1]!, 10) : 0;
+    listaParaRenombrar.push({ orig, nuevo, id });
+  }
+
+  // Ordenamos por ID antes de ejecutar el rename
+  listaParaRenombrar.sort((a, b) => a.id - b.id);
+
+  for (const item of listaParaRenombrar) {
     try {
-      await rename(`${ruta}\\${orig}`, `${ruta}\\${nuevo}`);
-      console.log(`✅ "${orig}" → "${nuevo}"`);
+      await rename(`${ruta}\\${item.orig}`, `${ruta}\\${item.nuevo}`);
+      console.log(`✅ "${item.orig}" → "${item.nuevo}"`);
     } catch (err) {
-      console.error(`❌ Error al renombrar "${orig}":`, err);
+      console.error(`❌ Error al renombrar "${item.orig}":`, err);
     }
   }
 }
