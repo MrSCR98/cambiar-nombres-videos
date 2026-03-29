@@ -129,8 +129,17 @@ async function principal(): Promise<void> {
       return;
     }
 
+    const { indicesIgnorar, ultimoContador } = detectarArchivosNumerados(originales);
+
+    const indicesNuevos = originales
+      .map((_, i) => i)
+      .filter(i => !indicesIgnorar.includes(i));
+
+    // ✅ FIX 1
+    const originalesNuevos: string[] = indicesNuevos.map(i => originales[i]!);
+
     console.log("Archivos encontrados (sin extensión):");
-    const nombresBase: string[] = nombresSinExtension(originales);
+    const nombresBase: string[] = nombresSinExtension(originalesNuevos);
     // console.log(nombresBase, "\n"); // <-- Array completo devuelto al usuario
     // console.log(JSON.stringify(nombresBase, null, 2));
     console.log(JSON.stringify(nombresBase, null, 0));
@@ -146,43 +155,54 @@ async function principal(): Promise<void> {
 
     let nuevos: string[] = [];
 
-while (true) {
-  const resp = await pregunta("Pega aquí tu array JSON de nuevos nombres: ");
+    while (true) {
+      const resp = await pregunta("Pega aquí tu array JSON de nuevos nombres: ");
 
-  try {
-    const parsed = JSON.parse(resp);
+      try {
+        const parsed = JSON.parse(resp);
 
-    if (!Array.isArray(parsed)) {
-      console.log("❌ Debe ser un array válido.");
-      continue;
-    }
+        if (!Array.isArray(parsed)) {
+          console.log("❌ Debe ser un array válido.");
+          continue;
+        }
 
-    // Limpiar + validar tipos
-    nuevos = parsed.map((n, i) => {
-      if (typeof n !== "string") {
-        throw new Error(`El elemento en posición ${i} no es un string.`);
+        // Limpiar + validar tipos
+        nuevos = parsed.map((n, i) => {
+          if (typeof n !== "string") {
+            throw new Error(`El elemento en posición ${i} no es un string.`);
+          }
+          return limpiarNombre(n);
+        });
+
+        if (nuevos.length !== nombresBase.length) {
+          console.log(`⚠️ Longitud incorrecta (${nuevos.length} vs ${nombresBase.length})`);
+          continue;
+        }
+
+        break;
+
+      } catch (err) {
+        console.log("❌ JSON inválido. Asegúrate de pegar un array correcto.");
       }
-      return limpiarNombre(n);
-    });
-
-    if (nuevos.length !== nombresBase.length) {
-      console.log(`⚠️ Longitud incorrecta (${nuevos.length} vs ${nombresBase.length})`);
-      continue;
     }
-
-    break;
-
-  } catch (err) {
-    console.log("❌ JSON inválido. Asegúrate de pegar un array correcto.");
-  }
-}
 
     // Reemplazar nombres con validación de tipo seguro
-    let renombrados: string[] = reemplazarNombres(originales, nuevos);
+    let renombrados: string[] = [...originales];
+
+    const nuevosRenombrados = reemplazarNombres(originalesNuevos, nuevos);
+
+    // ✅ FIX 2
+    indicesNuevos.forEach((idx, i) => {
+      if (nuevosRenombrados[i]) {
+        renombrados[idx] = nuevosRenombrados[i];
+      }
+    });
+
     mostrarAntesDespues(originales, renombrados);
 
     // Opciones: todos / individual / cancelar
     const opcion: string = (await pregunta("Opciones: 1. Cambiar todos  2. Seleccionar individual  3. Cancelar [1]: ")) || "1";
+
     if (opcion === "3") {
       console.log("Operación cancelada. No se hicieron cambios.");
       return;
@@ -200,17 +220,35 @@ while (true) {
 
     // Numeración automática
     const numerosLista: number[] = [0, 15, 16, 17, 18, 19, 20, 21, 22, 23];
-    const { indicesIgnorar, ultimoContador } = detectarArchivosNumerados(renombrados);
 
-    const startResp: string = await pregunta("Número inicial para añadir delante (00,15,...,23) o ENTER para omitir: ");
-    const startNumero: number = parseInt(startResp);
-    if (!isNaN(startNumero) && numerosLista.includes(startNumero)) {
-      renombrados = asignarContadorYNumeros(renombrados, numerosLista, startNumero, indicesIgnorar, ultimoContador);
+    const startResp: string = await pregunta("Número inicial (00,15,...,23) o 'c' para continuar: ");
+
+    let startNumero: number | null = null;
+
+    if (startResp.toLowerCase() === "c") {
+      // ✅ FIX 3
+      startNumero = numerosLista[0] ?? 0;
+    } else {
+      const num = parseInt(startResp);
+      if (!isNaN(num) && numerosLista.includes(num)) {
+        startNumero = num;
+      }
+    }
+
+    if (startNumero !== null) {
+      renombrados = asignarContadorYNumeros(
+        renombrados,
+        numerosLista,
+        startNumero,
+        indicesIgnorar,
+        ultimoContador
+      );
       mostrarAntesDespues(originales, renombrados);
     }
 
     // Preguntar si renombrar físicamente
     const aplicar: string = (await pregunta("¿Renombrar los archivos físicamente en la carpeta? (s/n) [s]: ")) || "s";
+
     if (aplicar.toLowerCase() === "s") {
       await renombrarFisicamente(ruta, originales, renombrados);
       console.log("\n✅ Archivos renombrados correctamente.");
