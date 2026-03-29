@@ -130,22 +130,35 @@ async function principal(): Promise<void> {
     }
 
     const { indicesIgnorar, ultimoContador } = detectarArchivosNumerados(originales);
-    const indicesNuevos = originales.map((_, i) => i).filter(i => !indicesIgnorar.includes(i));
-    const originalesNuevos = indicesNuevos.map(i => originales[i]!);
 
-    console.log("Archivos nuevos encontrados (sin extensión):");
+    const indicesNuevos = originales
+      .map((_, i) => i)
+      .filter(i => !indicesIgnorar.includes(i));
+
+    // ✅ FIX 1
+    const originalesNuevos: string[] = indicesNuevos.map(i => originales[i]!);
+
+    console.log("Archivos encontrados (sin extensión):");
     const nombresBase: string[] = nombresSinExtension(originalesNuevos);
     console.log(JSON.stringify(nombresBase, null, 0));
 
     let nuevos: string[] = [];
+
     while (true) {
       const resp = await pregunta("Pega aquí tu array JSON de nuevos nombres: ");
+
       try {
         const parsed = JSON.parse(resp);
-        if (!Array.isArray(parsed)) { console.log("❌ Debe ser un array válido."); continue; }
+
+        if (!Array.isArray(parsed)) {
+          console.log("❌ Debe ser un array válido.");
+          continue;
+        }
 
         nuevos = parsed.map((n, i) => {
-          if (typeof n !== "string") throw new Error(`El elemento en posición ${i} no es un string.`);
+          if (typeof n !== "string") {
+            throw new Error(`El elemento en posición ${i} no es un string.`);
+          }
           return limpiarNombre(n);
         });
 
@@ -153,54 +166,73 @@ async function principal(): Promise<void> {
           console.log(`⚠️ Longitud incorrecta (${nuevos.length} vs ${nombresBase.length})`);
           continue;
         }
+
         break;
-      } catch (err) { console.log("❌ JSON inválido. Asegúrate de pegar un array correcto."); }
+
+      } catch (err) {
+        console.log("❌ JSON inválido. Asegúrate de pegar un array correcto.");
+      }
     }
 
-    const nuevosRenombrados = reemplazarNombres(originalesNuevos, nuevos);
-    
-    // SOLUCIÓN ERROR 3: Cambiamos 'const' por 'let' para poder reasignar más adelante
     let renombrados: string[] = [...originales];
 
-    // SOLUCIÓN ERROR 1: Aseguramos que el valor no es undefined con el operador !
-    indicesNuevos.forEach((idx, i) => { 
-      renombrados[idx] = nuevosRenombrados[i]!; 
+    const nuevosRenombrados = reemplazarNombres(originalesNuevos, nuevos);
+
+    // ✅ FIX 2
+    indicesNuevos.forEach((idx, i) => {
+      if (nuevosRenombrados[i]) {
+        renombrados[idx] = nuevosRenombrados[i];
+      }
     });
 
-    mostrarAntesDespues(originalesNuevos, nuevosRenombrados);
+    mostrarAntesDespues(originales, renombrados);
 
     const opcion: string = (await pregunta("Opciones: 1. Cambiar todos  2. Seleccionar individual  3. Cancelar [1]: ")) || "1";
-    if (opcion === "3") { console.log("Operación cancelada. No se hicieron cambios."); return; }
-    else if (opcion === "2") {
-      // CORRECCIÓN: Usamos 'originalesNuevos' que es el array que contiene los archivos a procesar
-      for (let i = 0; i < originalesNuevos.length; i++) {
-        const orig = originalesNuevos[i]!; // ! asegura que existe
-        const ren = nuevosRenombrados[i]!;
-        
+
+    if (opcion === "3") {
+      console.log("Operación cancelada. No se hicieron cambios.");
+      return;
+    } else if (opcion === "2") {
+      for (let i = 0; i < originales.length; i++) {
+        const orig = originales[i];
+        const ren = renombrados[i];
+        if (!orig || !ren) continue;
         const confirmar: string = (await pregunta(`¿Cambiar "${orig}" → "${ren}"? (s/n) [s]: `)) || "s";
-        
-        if (confirmar.toLowerCase() !== "s") { 
-          // Si el usuario dice que no, restauramos el nombre original en esa posición
-          const indiceOriginal = indicesNuevos[i]!;
-          renombrados[indiceOriginal] = originalesNuevos[i]!; 
+        if (confirmar.toLowerCase() !== "s") {
+          renombrados[i] = orig;
         }
       }
     }
 
     const numerosLista: number[] = [0, 15, 16, 17, 18, 19, 20, 21, 22, 23];
-    const startResp: string = await pregunta("Número inicial para añadir delante (00,15,...,23) o ENTER para omitir: ");
-    const startNumero: number = parseInt(startResp);
-    
-    if (!isNaN(startNumero) && numerosLista.includes(startNumero)) {
-      // SOLUCIÓN ERROR 3 (Parte B): Reasignación permitida por usar 'let'
-      renombrados = asignarContadorYNumeros(renombrados, numerosLista, startNumero, indicesIgnorar, ultimoContador);
-      
-      // SOLUCIÓN ERROR 4: Casting forzado a string[] ya que sabemos que el mapeo será válido
-      const vistaFinal = indicesNuevos.map(i => renombrados[i]!) as string[];
-      mostrarAntesDespues(originalesNuevos, vistaFinal);
+
+    const startResp: string = await pregunta("Número inicial (00,15,...,23) o 'c' para continuar: ");
+
+    let startNumero: number | null = null;
+
+    if (startResp.toLowerCase() === "c") {
+      // ✅ FIX 3
+      startNumero = numerosLista[0] ?? 0;
+    } else {
+      const num = parseInt(startResp);
+      if (!isNaN(num) && numerosLista.includes(num)) {
+        startNumero = num;
+      }
+    }
+
+    if (startNumero !== null) {
+      renombrados = asignarContadorYNumeros(
+        renombrados,
+        numerosLista,
+        startNumero,
+        indicesIgnorar,
+        ultimoContador
+      );
+      mostrarAntesDespues(originales, renombrados);
     }
 
     const aplicar: string = (await pregunta("¿Renombrar los archivos físicamente en la carpeta? (s/n) [s]: ")) || "s";
+
     if (aplicar.toLowerCase() === "s") {
       await renombrarFisicamente(ruta, originales, renombrados);
       console.log("\n✅ Archivos renombrados correctamente.");
