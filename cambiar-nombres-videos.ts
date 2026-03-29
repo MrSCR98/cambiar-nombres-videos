@@ -16,6 +16,14 @@ async function listarArchivos(ruta: string): Promise<Archivo[]> {
   }
 }
 
+/** Obtener solo nombres sin extensión */
+function nombresSinExtension(archivos: string[]): string[] {
+  return archivos.map(f => {
+    const idx = f.lastIndexOf(".");
+    return idx !== -1 ? f.slice(0, idx) : f;
+  });
+}
+
 /** Reemplazar nombres de forma segura, manteniendo extensión */
 function reemplazarNombres(originales: Archivo[], nuevos: (string | undefined)[]): Archivo[] {
   if (originales.length !== nuevos.length) {
@@ -92,16 +100,20 @@ async function principal(): Promise<void> {
 
     console.log(`Archivos encontrados: ${originales.length}\n`);
 
+    // Mostrar nombres sin extensión al usuario
+    const nombresBase: string[] = nombresSinExtension(originales);
+
     // Pedir nuevos nombres
     const nuevos: string[] = [];
-    for (const original of originales) {
+    for (const nombre of nombresBase) {
       let resp: string = "";
       while (!resp.trim()) {
-        resp = await pregunta(`Nuevo nombre para "${original}" (sin extensión, obligatorio): `);
+        resp = await pregunta(`Nuevo nombre para "${nombre}" (sin extensión, obligatorio): `);
       }
       nuevos.push(resp.toUpperCase());
     }
 
+    // Generar array final con extensión
     const renombrados: Archivo[] = reemplazarNombres(originales, nuevos);
 
     // Vista previa
