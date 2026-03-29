@@ -8,9 +8,7 @@ type Archivo = string;
 async function listarArchivos(ruta: string): Promise<Archivo[]> {
   try {
     const entries = await readdir(ruta, { withFileTypes: true });
-    // Filtrar solo archivos (sin predicado de tipo)
-    const files: string[] = entries.filter(e => e.isFile()).map(e => e.name);
-    return files;
+    return entries.filter(e => e.isFile()).map(e => e.name);
   } catch (err) {
     console.error("❌ Error al leer la carpeta:", err);
     return [];
@@ -25,6 +23,11 @@ function nombresSinExtension(archivos: Archivo[]): string[] {
   });
 }
 
+/** Limpiar nombres de caracteres inválidos */
+function limpiarNombre(nombre: string): string {
+  return nombre.replace(/[\\/:*?"<>|]/g, "").trim();
+}
+
 /** Reemplazar nombres manteniendo extensión */
 function reemplazarNombres(originales: Archivo[], nuevos: string[]): Archivo[] {
   if (originales.length !== nuevos.length) {
@@ -32,10 +35,8 @@ function reemplazarNombres(originales: Archivo[], nuevos: string[]): Archivo[] {
   }
 
   return originales.map((nombre, i) => {
-    const nuevo = nuevos[i];
-    if (!nuevo || !nuevo.trim()) {
-      throw new Error(`El nombre nuevo para "${nombre}" está vacío.`);
-    }
+    const nuevo = limpiarNombre(nuevos[i]);
+    if (!nuevo) throw new Error(`El nombre nuevo para "${nombre}" está vacío después de limpiar caracteres inválidos.`);
     const idx = nombre.lastIndexOf(".");
     const extension = idx !== -1 ? nombre.slice(idx) : "";
     return `${nuevo.toUpperCase()}${extension}`;
@@ -104,7 +105,7 @@ async function renombrarFisicamente(ruta: string, originales: Archivo[], nuevos:
   for (let i = 0; i < originales.length; i++) {
     const orig = originales[i];
     const nuevo = nuevos[i];
-    if (!orig || !nuevo) continue; // Validación extra para TS
+    if (!orig || !nuevo) continue;
     try {
       await rename(`${ruta}\\${orig}`, `${ruta}\\${nuevo}`);
     } catch (err) {
@@ -126,34 +127,20 @@ async function principal(): Promise<void> {
       return;
     }
 
-    console.log(`Archivos encontrados: ${originales.length}\n`);
-
+    console.log("Archivos encontrados (sin extensión):");
     const nombresBase: string[] = nombresSinExtension(originales);
+    console.log(nombresBase, "\n"); // <-- Array completo devuelto al usuario
 
-    // Pedir nuevos nombres
-    const nuevos: string[] = [];
-    for (let i = 0; i < nombresBase.length; i++) {
-      const orig = originales[i];
-      const base = nombresBase[i];
-      if (!orig || !base) continue; // seguridad
-
-      const regex = /^(\d{4}) (\d{2}) /;
-      const match = orig.match(regex);
-      if (match !== null) {
-        nuevos.push(base);
-        continue;
-      }
-
-      let resp: string = "";
-      while (!resp.trim()) {
-        const tmp = await pregunta(`Nuevo nombre para "${base}" (sin extensión, obligatorio): `);
-        if (tmp) resp = tmp;
-      }
-      nuevos.push(resp);
+    // ✅ Paso 2 – El usuario debe devolver un array con la misma longitud
+    let nuevos: string[] = [];
+    while (true) {
+      const resp = await pregunta("Pega aquí tu array de nuevos nombres separados por comas: ");
+      nuevos = resp.split(",").map(n => limpiarNombre(n));
+      if (nuevos.length === nombresBase.length) break;
+      console.log(`⚠️ La longitud no coincide (${nuevos.length} vs ${nombresBase.length}). Intenta de nuevo.`);
     }
 
     let renombrados: string[] = reemplazarNombres(originales, nuevos);
-
     mostrarAntesDespues(originales, renombrados);
 
     // Opciones: todos / individual / cancelar
@@ -173,11 +160,10 @@ async function principal(): Promise<void> {
       }
     }
 
-    // Detectar archivos numerados
+    // Numeración automática
     const numerosLista: number[] = [0, 15, 16, 17, 18, 19, 20, 21, 22, 23];
     const { indicesIgnorar, ultimoContador } = detectarArchivosNumerados(renombrados);
 
-    // Preguntar número inicial
     const startResp: string = await pregunta("Número inicial para añadir delante (00,15,...,23) o ENTER para omitir: ");
     const startNumero: number = parseInt(startResp);
     if (!isNaN(startNumero) && numerosLista.includes(startNumero)) {
