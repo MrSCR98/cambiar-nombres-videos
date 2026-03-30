@@ -224,6 +224,7 @@ async function principal(): Promise<void> {
 }
 
     console.log("\n📄 Archivos nuevos detectados:");
+    console.log("\nCorrige las frases en español de España y pon todas las letras en mayúsculas. Además, si te paso un array o un JSON, devuelve un array o un JSON en una sola línea.\n");
     console.log(JSON.stringify(nombresSinExtension(originalesNuevos), null, 0));
 
     let nuevosNombresLimpios: NuevosNombres = [];
@@ -272,7 +273,8 @@ async function principal(): Promise<void> {
 
     const numerosLista = [0, 15, 16, 17, 18, 19, 20, 21, 22, 23];
     console.log(`\nÚltimo número utilizado: ${ultimoNumero === -1 ? "Ninguno" : ultimoNumero}`);
-    const startResp = await pregunta("Número inicial para numerar archivos (00,15,16,17,18,19,20,21,22,23) o 'c' para continuar automáticamente: ");
+    const startResp = (await pregunta("Número inicial para numerar archivos (00,15,16,17,18,19,20,21,22,23) o 'c' para continuar automáticamente [c]: "
+    )) || "c";
 
     let startNumero: number;
     if (startResp.toLowerCase() === "c") {
