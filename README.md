@@ -112,7 +112,7 @@ El código está dividido en varias funciones que hacen cosas específicas:
 
 ## 🖥️ Uso rápido
 
-1. Instala Bun: [https://bun.sh](https://bun.sh)
+1. Instala Bun: [https://bun.com](https://bun.com)
 2. Cambia la ruta de la carpeta:
 
 ```ts
