@@ -200,7 +200,7 @@ async function principal(): Promise<void> {
   console.log("\n🎬 GESTOR DE RENOMBRADO .SHORTS\n");
 
   try {
-    const ruta = "E:\\SERGIPC\\Action Videos\\VIDEOS PARA SUBIR\\.shorts2";
+    const ruta = "E:\\SERGIPC\\Action Videos\\VIDEOS PARA SUBIR\\.shorts";
     const originales = await listarArchivos(ruta);
 
     if (!originales.length) {
