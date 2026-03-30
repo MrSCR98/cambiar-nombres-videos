@@ -1,4 +1,4 @@
-import { readdir, rename } from "node:fs/promises";
+import { readdir, rename } from "node:fs/promises"; 
 import readline from "readline";
 
 type Archivo = string;
@@ -28,6 +28,11 @@ function nombresSinExtension(archivos: Archivo[]): string[] {
 /** 3. Limpiar nombre de caracteres inválidos */
 function limpiarNombre(nombre: string): string {
   return nombre.replace(/[\\/:*?"<>|]/g, "").trim();
+}
+
+/** 🔥 AÑADIDO: Quitar numeración tipo "0000 00 " */
+function quitarNumeracion(nombre: string): string {
+  return nombre.replace(/^\d{4}\s\d{2}\s+/, "");
 }
 
 /** 4. Reemplazar nombres manteniendo extensión */
@@ -169,6 +174,27 @@ async function renombrarFisicamente(ruta: string, originales: Archivo[], nuevos:
   }
 }
 
+/** 🔥 Función para limpiar numeración de todos los archivos */
+async function preguntarYQuitarNumeracion(ruta: string, archivos: Archivo[]) {
+  const limpiarTodo = (await pregunta("\n🧹 ¿Quieres quitar TODA la numeración de TODOS los archivos? (s/n) [n]: ")) || "n";
+  
+  if (!limpiarTodo.trim().toLowerCase().startsWith("s")) return;
+
+  const sinNumeracion = archivos.map(f => quitarNumeracion(f));
+
+  console.log("\n🔹 Vista previa quitando numeración 🔹\n");
+  mostrarSoloCambiosOrdenados(archivos, sinNumeracion);
+
+  const confirmar = (await pregunta("¿Confirmar limpieza total? (s/n) [s]: ")) || "s";
+
+  if (confirmar.trim().toLowerCase().startsWith("s")) {
+    await renombrarFisicamente(ruta, archivos, sinNumeracion);
+    console.log("\n🎉 Numeración eliminada correctamente!");
+  } else {
+    console.log("\n❌ Limpieza cancelada.");
+  }
+}
+
 /** FUNCIÓN PRINCIPAL */
 async function principal(): Promise<void> {
   console.log("\n🎬 GESTOR DE RENOMBRADO .SHORTS\n");
@@ -186,10 +212,16 @@ async function principal(): Promise<void> {
     const indicesNuevos = originales.map((_, i) => i).filter(i => !indicesIgnorar.includes(i));
     const originalesNuevos = indicesNuevos.map(i => originales[i]!);
 
+    //if (!originalesNuevos.length) {
+    //  console.log("ℹ️ No hay archivos nuevos sin numeración para procesar.");
+    //  return;
+    //}
+
     if (!originalesNuevos.length) {
-      console.log("ℹ️ No hay archivos nuevos sin numeración para procesar.");
-      return;
-    }
+  console.log("ℹ️ No hay archivos nuevos sin numeración para procesar.");
+  await preguntarYQuitarNumeracion(ruta, originales);
+  return;
+}
 
     console.log("\n📄 Archivos nuevos detectados:");
     console.log(JSON.stringify(nombresSinExtension(originalesNuevos), null, 0));
@@ -263,6 +295,9 @@ async function principal(): Promise<void> {
     } else {
       console.log("\n❌ Operación cancelada por el usuario.");
     }
+
+    // 🔥 OPCIÓN GLOBAL FINAL
+    await preguntarYQuitarNumeracion(ruta, originales);
 
   } catch (err) {
     console.error("❌ Error inesperado:", err);
