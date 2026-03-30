@@ -161,7 +161,6 @@ bun run exe
 - Revisa siempre la **vista previa** antes de aplicar cambios.
 - Los nombres deben estar en **mayúsculas** y sin caracteres inválidos.
 - Puedes usar la opción de quitar numeración para limpiar archivos antiguos.
-- Este programa funciona únicamente si tienes **Bun** instalado.
 
 ---
 
