@@ -284,9 +284,17 @@ async function principal(): Promise<void> {
           parsed.every((item) => typeof item === 'string')
         ) {
           if (parsed.length !== originalesNuevos.length) {
+            const total = originalesNuevos.length
+            const actual = parsed.length
+            const diff = actual - total
+
             console.log(
-              `❌ Debes ingresar exactamente ${originalesNuevos.length} nombres.`
+              `❌ Debes ingresar exactamente ${total} nombres.\n` +
+                (actual < total
+                  ? `❌ Faltan ${Math.abs(diff)} nombres (${actual} / ${total}).`
+                  : `❌ Te sobran ${diff} nombres (${actual} / ${total}).`)
             )
+
             continue
           }
           nuevosNombresLimpios = (parsed as string[]).map(limpiarNombre)
