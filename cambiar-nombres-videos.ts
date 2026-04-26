@@ -175,6 +175,27 @@ function pregunta(texto: string): Promise<string> {
   return Promise.resolve(resp ?? '')
 }
 
+/** Reintentar rename si el archivo está bloqueado */
+async function renombrarSeguro(
+  origen: string,
+  destino: string,
+  intentos = 3
+): Promise<{ ok: boolean; error?: unknown }> {
+  for (let i = 0; i < intentos; i++) {
+    try {
+      await Deno.rename(origen, destino)
+      return { ok: true }
+    } catch (err) {
+      if (i === intentos - 1) {
+        return { ok: false, error: err }
+      }
+      await new Promise((r) => setTimeout(r, 300))
+    }
+  }
+
+  return { ok: false }
+}
+
 /** 9. Renombrar físicamente */
 async function renombrarFisicamente(
   ruta: string,
@@ -187,6 +208,7 @@ async function renombrarFisicamente(
   for (let i = 0; i < originales.length; i++) {
     const orig = originales[i]!
     const nuevo = nuevos[i]!
+
     if (orig === nuevo) continue
 
     const match = nuevo.match(/^(\d{4})/)
@@ -197,13 +219,31 @@ async function renombrarFisicamente(
   // Ordenamos por ID antes de ejecutar el rename
   listaParaRenombrar.sort((a, b) => a.id - b.id)
 
+  const fallos: { archivo: string; error: unknown }[] = []
+
   for (const item of listaParaRenombrar) {
-    try {
-      await Deno.rename(unirRuta(ruta, item.orig), unirRuta(ruta, item.nuevo))
+    const res = await renombrarSeguro(
+      unirRuta(ruta, item.orig),
+      unirRuta(ruta, item.nuevo)
+    )
+
+    if (res.ok) {
       console.log(`✅ "${item.orig}" → "${item.nuevo}"`)
-    } catch (err) {
-      console.error(`❌ Error al renombrar "${item.orig}":`, err)
+    } else {
+      console.log(`⚠️ Falló: "${item.orig}"`)
+      fallos.push({ archivo: item.orig, error: res.error })
     }
+  }
+
+  console.log('\n📊 RESUMEN FINAL')
+  console.log(`✔️ Correctos: ${listaParaRenombrar.length - fallos.length}`)
+  console.log(`❌ Fallidos: ${fallos.length}`)
+
+  if (fallos.length > 0) {
+    console.log('\n⚠️ Archivos que fallaron:')
+    fallos.forEach((f) => {
+      console.log(`- ${f.archivo}`)
+    })
   }
 }
 
@@ -319,7 +359,7 @@ async function principal(): Promise<void> {
     )
 
     let listaEnMemoria: Archivo[] = [...originales]
-    let indicesParaNumerar: number[] = []
+    const indicesParaNumerar: number[] = []
 
     const opcion =
       (await pregunta(
