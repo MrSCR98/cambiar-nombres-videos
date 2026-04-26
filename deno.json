@@ -1,0 +1,7 @@
+{
+  "tasks": {
+    "dev": "deno run --watch --allow-read=\"E:\\\\SERGIPC\\\\Action Videos\\\\VIDEOS PARA SUBIR\\\\.shorts\" --allow-write=\"E:\\\\SERGIPC\\\\Action Videos\\\\VIDEOS PARA SUBIR\\\\.shorts\" cambiar-nombres-videos.ts",
+    "exe": "deno compile --allow-read=\"E:\\\\SERGIPC\\\\Action Videos\\\\VIDEOS PARA SUBIR\\\\.shorts\" --allow-write=\"E:\\\\SERGIPC\\\\Action Videos\\\\VIDEOS PARA SUBIR\\\\.shorts\" --icon .icono\\favicon_256x256.ico -o exe/cambiar-nombres.exe cambiar-nombres-videos.ts"
+  },
+  "imports": {}
+}
