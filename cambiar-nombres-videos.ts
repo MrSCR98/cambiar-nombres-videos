@@ -148,6 +148,7 @@ function mostrarSoloCambiosOrdenados(
   originales.forEach((orig, i) => {
     const nuevo = propuestos[i]!
     if (orig !== nuevo) {
+      // Extraemos el ID (0000) para poder ordenar
       const match = nuevo.match(/^(\d{4})/)
       const id = match ? parseInt(match[1]!, 10) : 0
       cambios.push({ orig, nuevo, id })
@@ -161,6 +162,7 @@ function mostrarSoloCambiosOrdenados(
     return
   }
 
+  // Ordenamos el array de cambios por el ID numérico
   cambios.sort((a, b) => a.id - b.id)
 
   cambios.forEach((c) => {
@@ -181,6 +183,7 @@ async function renombrarFisicamente(
 ) {
   const listaParaRenombrar: { orig: string; nuevo: string; id: number }[] = []
 
+  // Recopilamos los que realmente cambian
   for (let i = 0; i < originales.length; i++) {
     const orig = originales[i]!
     const nuevo = nuevos[i]!
@@ -191,6 +194,7 @@ async function renombrarFisicamente(
     listaParaRenombrar.push({ orig, nuevo, id })
   }
 
+  // Ordenamos por ID antes de ejecutar el rename
   listaParaRenombrar.sort((a, b) => a.id - b.id)
 
   for (const item of listaParaRenombrar) {
@@ -251,6 +255,11 @@ async function principal(): Promise<void> {
       .filter((i) => !indicesIgnorar.includes(i))
 
     const originalesNuevos = indicesNuevos.map((i) => originales[i]!)
+
+    //if (!originalesNuevos.length) {
+    //  console.log("ℹ️ No hay archivos nuevos sin numeración para procesar.");
+    //  return;
+    //}
 
     if (!originalesNuevos.length) {
       console.log('ℹ️ No hay archivos nuevos sin numeración para procesar.')
@@ -374,6 +383,7 @@ async function principal(): Promise<void> {
       ultimoContador
     )
 
+    // VISTA PREVIA ORDENADA
     mostrarSoloCambiosOrdenados(originales, nombresPropuestos)
 
     const aplicar =
@@ -388,6 +398,7 @@ async function principal(): Promise<void> {
       console.log('\n❌ Operación cancelada por el usuario.')
     }
 
+    // 🔥 OPCIÓN GLOBAL FINAL
     await preguntarYQuitarNumeracion(ruta, originales)
   } catch (err) {
     console.error('❌ Error inesperado:', err)
